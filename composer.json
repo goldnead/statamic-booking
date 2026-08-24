@@ -1,0 +1,78 @@
+{
+  "name": "goldnead/statamic-booking",
+  "description": "Records Cal.com bookings in Statamic: signed webhooks, idempotent, with a seam for what happens next.",
+  "type": "statamic-addon",
+  "license": "proprietary",
+  "keywords": [
+    "statamic",
+    "statamic-addon",
+    "booking",
+    "calcom",
+    "appointments"
+  ],
+  "autoload": {
+    "psr-4": {
+      "Goldnead\\StatamicBooking\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Goldnead\\StatamicBooking\\Tests\\": "tests"
+    }
+  },
+  "extra": {
+    "statamic": {
+      "slug": "statamic-booking",
+      "name": "Statamic Booking",
+      "description": "Records Cal.com bookings in Statamic: signed webhooks, idempotent, with a seam for what happens next.",
+      "url": "https://github.com/goldnead/statamic-booking",
+      "developer": "Adrian Goldner",
+      "developer-url": "https://gldnr.studio"
+    },
+    "laravel": {
+      "providers": [
+        "Goldnead\\StatamicBooking\\ServiceProvider"
+      ]
+    }
+  },
+  "authors": [
+    {
+      "name": "Adrian Goldner",
+      "email": "info@adriangoldner.com"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/goldnead/statamic-booking/issues",
+    "source": "https://github.com/goldnead/statamic-booking"
+  },
+  "require": {
+    "php": "^8.2",
+    "statamic/cms": "^6.0"
+  },
+  "require-dev": {
+    "larastan/larastan": "^3.0",
+    "laravel/pint": "^1.18",
+    "orchestra/testbench": "^10.0|^11.0",
+    "phpunit/phpunit": "^11.0|^12.0"
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "preferred-install": "dist",
+    "sort-packages": true,
+    "allow-plugins": true
+  },
+  "scripts": {
+    "test": [
+      "php -d memory_limit=-1 ./vendor/bin/phpunit"
+    ],
+    "lint": [
+      "./vendor/bin/pint --test"
+    ],
+    "fix": [
+      "./vendor/bin/pint"
+    ],
+    "analyse": [
+      "./vendor/bin/phpstan analyse"
+    ]
+  }
+}
