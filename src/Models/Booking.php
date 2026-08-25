@@ -38,6 +38,24 @@ class Booking extends Model
 
     protected $guarded = [];
 
+    /**
+     * Every status this package writes.
+     *
+     * One list, so the filter, the screen and the model cannot drift apart.
+     *
+     * @return list<string>
+     */
+    public static function statuses(): array
+    {
+        return [
+            self::STATUS_BOOKED,
+            self::STATUS_RESCHEDULED,
+            self::STATUS_REQUESTED,
+            self::STATUS_CANCELLED,
+            self::STATUS_REJECTED,
+        ];
+    }
+
     protected function casts(): array
     {
         return [

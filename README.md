@@ -93,6 +93,21 @@ stamps `cancelled_at`: "there was an appointment and it was cancelled" is a diff
 carries the booker. One careless template is all it takes to publish the people who booked, so the
 tag simply has nothing to publish. Whoever needs the rest has the model.
 
+## In the Control Panel
+
+Utilities → **Bookings**. A listing of what came in: when, who, status, how long, which endpoint.
+Search, sorting, column choice, filters and saved views are core's, because the screen is built on
+core's `Listing` rather than a table of its own. Two filters: status, and upcoming vs. past.
+
+The buyer's address is its own column and is **hidden until asked for**.
+
+Read-only, deliberately. Cal.com owns these appointments; a cancel button here would put the site and
+the calendar out of step, with the site being the one that is wrong.
+
+Access is the `access bookings utility` permission, which appears in Statamic's own permission list
+once the addon is installed. **This is the only place names and addresses are shown** — the Antlers
+tags, which anyone can drop into a public template, carry none of it.
+
 ## Configuration
 
 Every key lives in `config/statamic-booking.php`.
