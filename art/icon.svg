@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#0E7490"/>
+    </linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0E7490" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <!-- rounded square background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- a clock, not a calendar grid: this addon records a moment somebody
+       agreed to, and it deliberately does not own the calendar that found it. -->
+  <g filter="url(#sh)">
+    <circle cx="256" cy="256" r="168" fill="#FFFFFF"/>
+  </g>
+  <circle cx="256" cy="256" r="118" fill="url(#bg)"/>
+  <rect x="242" y="150" width="28" height="120" rx="14" fill="#FFFFFF"/>
+  <rect x="242" y="244" width="28" height="98" rx="14" fill="#FFFFFF" transform="rotate(-64 256 256)"/>
+  <circle cx="256" cy="256" r="20" fill="#FFFFFF"/>
+</svg>
