@@ -1,5 +1,8 @@
 {
     "preset": "laravel",
+    "notPath": [
+        "tests/Fakes/insights-table-metric.php"
+    ],
     "rules": {
         "declare_strict_types": false,
         "ordered_imports": {

@@ -26,4 +26,19 @@ return [
     'filter_any_status' => 'Any',
     'filter_upcoming' => 'Upcoming',
     'filter_past' => 'Past',
+
+    // The figures this addon offers the Insights dashboard, if it is installed.
+    'metric_group' => 'Bookings',
+    'metric_scheduled' => 'Appointments',
+    'metric_scheduled_description' => 'Appointments that fall into the period, counted on the day they take place.',
+    'metric_cancelled' => 'Cancellations',
+    'metric_cancelled_description' => 'Bookings that were called off, counted on the day the cancellation arrived.',
+    'metric_cancellation_rate' => 'Cancellation rate',
+    'metric_cancellation_rate_description' => 'Of the appointments that fall in this period, the share that fell through, whenever the cancellation was made. Not "cancellations divided by appointments": the tile beside it counts cancellations on the day they arrived, which can be a different set of appointments entirely. No appointments, no rate.',
+    'metric_hours_booked' => 'Hours booked',
+    'metric_hours_booked_description' => 'How much time the period\'s appointments take up. Cancelled ones do not count.',
+    'metric_breakdown_status' => 'Status',
+    'metric_breakdown_endpoint' => 'Endpoint',
+    'metric_no_status' => 'No status',
+    'metric_no_endpoint' => 'No endpoint',
 ];

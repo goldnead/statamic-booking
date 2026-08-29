@@ -3,12 +3,18 @@
 namespace Goldnead\StatamicBooking;
 
 use Goldnead\StatamicBooking\Http\Controllers\Cp\BookingsController;
+use Goldnead\StatamicBooking\Integrations\Insights\CancellationRate;
+use Goldnead\StatamicBooking\Integrations\Insights\Cancelled;
+use Goldnead\StatamicBooking\Integrations\Insights\HoursBooked;
+use Goldnead\StatamicBooking\Integrations\Insights\Scheduled;
 use Goldnead\StatamicBooking\Support\BookingRecorder;
 use Goldnead\StatamicBooking\Support\SignatureVerifier;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
+use Throwable;
 
 class ServiceProvider extends AddonServiceProvider
 {
@@ -53,6 +59,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'statamic-booking');
 
         $this->bootUtility();
+        $this->registerInsightsMetrics();
 
         // Resolved per request rather than baked into a cached route file.
         RateLimiter::for('statamic-booking', fn ($request) => Limit::perMinute(
@@ -71,6 +78,79 @@ class ServiceProvider extends AddonServiceProvider
         $this->publishes([
             __DIR__.'/../database/migrations' => database_path('migrations'),
         ], 'statamic-booking-migrations');
+    }
+
+    /**
+     * The metric handles this addon contributes, and the classes behind them.
+     *
+     * Handle and class both, so the registry can store the class name without
+     * constructing anything to find out what it is called. Naming the handle
+     * twice is the price of that laziness, and it is the cheaper half of the
+     * trade: an install with twenty addons would otherwise build every metric
+     * object of every one of them on a request that renders none.
+     *
+     * The handles are frozen from the moment they are registered — they end up
+     * in saved dashboards and in URLs. Renaming one is a breaking change.
+     *
+     * @var array<class-string, string>
+     */
+    protected const INSIGHTS_METRICS = [
+        Scheduled::class => 'booking.scheduled',
+        Cancelled::class => 'booking.cancelled',
+        CancellationRate::class => 'booking.cancellation_rate',
+        HoursBooked::class => 'booking.hours_booked',
+    ];
+
+    /**
+     * Offer the booking figures to the analytics addon, if it is there.
+     *
+     * From an `app->booted()` callback rather than from `bootAddon()`: the
+     * sibling's container bindings only exist once its own provider has booted,
+     * and this one may boot first. Registering earlier registers into nothing,
+     * silently — an empty screen with no error anywhere, which is the worst
+     * shape this failure could take.
+     *
+     * **Nothing here throws, ever.** A missing, half-installed or mid-upgrade
+     * analytics addon must cost a few tiles on a screen nobody has open, never
+     * a booking webhook. The guards are three, and each one has caught a real
+     * variation of "installed but not quite": the class may be absent, the
+     * container may refuse to build the manager, and an older release of the
+     * sibling may have the facade without this method on it.
+     *
+     * The metric classes name the sibling's contract in their `extends` and
+     * their type hints, which is safe precisely because of the first guard: PHP
+     * loads a class when something touches it, and nothing touches these unless
+     * the facade exists. Hence `suggest` in composer.json rather than `require`
+     * — an install of this addon alone must not drag an analytics package in.
+     */
+    protected function registerInsightsMetrics(): void
+    {
+        $this->app->booted(function (): void {
+            $facade = '\Goldnead\StatamicInsights\Facades\Insights';
+
+            if (! class_exists($facade)) {
+                return;
+            }
+
+            try {
+                $manager = $facade::getFacadeRoot();
+
+                // Asked of the object, never of the facade: a facade forwards
+                // through `__callStatic` and declares none of what it forwards,
+                // so the probe on the facade itself is always false.
+                if (! is_object($manager) || ! method_exists($manager, 'registerMetric')) {
+                    return;
+                }
+
+                foreach (self::INSIGHTS_METRICS as $class => $handle) {
+                    $manager->registerMetric($class, $handle);
+                }
+            } catch (Throwable $e) {
+                Log::warning('statamic-booking: the insights metrics could not be registered.', [
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     /**

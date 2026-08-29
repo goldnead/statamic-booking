@@ -26,4 +26,19 @@ return [
     'filter_any_status' => 'Alle',
     'filter_upcoming' => 'Anstehend',
     'filter_past' => 'Vergangen',
+
+    // Die Zahlen, die dieses Addon dem Insights-Dashboard anbietet, falls es da ist.
+    'metric_group' => 'Buchungen',
+    'metric_scheduled' => 'Termine',
+    'metric_scheduled_description' => 'Termine, die in den Zeitraum fallen, gezählt am Tag, an dem sie stattfinden.',
+    'metric_cancelled' => 'Absagen',
+    'metric_cancelled_description' => 'Buchungen, die abgesagt wurden, gezählt am Tag der Absage.',
+    'metric_cancellation_rate' => 'Absagequote',
+    'metric_cancellation_rate_description' => 'Von den Terminen dieses Zeitraums der Anteil, der ausgefallen ist, ganz gleich wann die Absage kam. Nicht „Absagen geteilt durch Termine": die Kachel daneben zählt Absagen am Tag der Absage und damit unter Umständen ganz andere Termine. Ohne Termine keine Quote.',
+    'metric_hours_booked' => 'Gebuchte Stunden',
+    'metric_hours_booked_description' => 'Wie viel Zeit die Termine des Zeitraums einnehmen. Abgesagte zählen nicht mit.',
+    'metric_breakdown_status' => 'Status',
+    'metric_breakdown_endpoint' => 'Endpunkt',
+    'metric_no_status' => 'Ohne Status',
+    'metric_no_endpoint' => 'Ohne Endpunkt',
 ];
