@@ -184,6 +184,12 @@ class ServiceProvider extends AddonServiceProvider
         // die Absicht — ein Abschnitt „Verkauf" mit einem einzigen Eintrag
         // waere in einer Installation ohne Kasse eine Ueberschrift ohne Inhalt.
         Nav::extend(function ($nav) {
+            // Erst aushaengen, dann einhaengen — sonst steht der Bildschirm
+            // zweimal da: einmal unter „Hilfsmittel", wohin `Utility::register`
+            // ihn haengt, und einmal hier. Die Registrierung bleibt, sie traegt
+            // Route, Recht und Middleware.
+            $nav->remove('Tools', 'Utilities', __('statamic-booking::messages.utility_nav'));
+
             $section = class_exists(\Goldnead\StatamicPayments\Cp\SuiteNav::class)
                 ? \Goldnead\StatamicPayments\Cp\SuiteNav::section()
                 : __('statamic-booking::messages.utility_nav');
