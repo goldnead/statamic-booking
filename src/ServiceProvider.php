@@ -12,6 +12,7 @@ use Goldnead\StatamicBooking\Support\SignatureVerifier;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 use Throwable;
@@ -171,6 +172,28 @@ class ServiceProvider extends AddonServiceProvider
         // "Bookings" in the nav and an English description on the utilities
         // overview, above a screen that is entirely German.
         Utility::extend(fn () => $this->registerUtility());
+
+        // Der Bildschirm bleibt eine Utility — dieselbe Route, dasselbe Recht.
+        // Was fehlte, war der Weg dorthin: unter „Hilfsmittel" steht er
+        // zwischen Cache und PHP-Info (Adrian, 03.09.2026).
+        //
+        // Anders als offers, funnels und products haengt dieses Addon nicht an
+        // `statamic-payments`, kann den gemeinsamen Abschnittsnamen also nicht
+        // voraussetzen. Steht payments daneben, landen beide im selben
+        // Abschnitt; laeuft booking allein, bekommt es seinen eigenen. Das ist
+        // die Absicht — ein Abschnitt „Verkauf" mit einem einzigen Eintrag
+        // waere in einer Installation ohne Kasse eine Ueberschrift ohne Inhalt.
+        Nav::extend(function ($nav) {
+            $section = class_exists(\Goldnead\StatamicPayments\Cp\SuiteNav::class)
+                ? \Goldnead\StatamicPayments\Cp\SuiteNav::section()
+                : __('statamic-booking::messages.utility_nav');
+
+            $nav->create(__('statamic-booking::messages.utility_nav'))
+                ->section($section)
+                ->icon('calendar')
+                ->route('utilities.bookings')
+                ->can('access bookings utility');
+        });
 
         return $this;
     }
