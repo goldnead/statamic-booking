@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.0
+
+### Changed: the Bookings screen leaves Utilities
+
+The screen is registered as a Statamic utility and therefore sat under Utilities, between Cache and
+PHP Info (Adrian, 03.09.2026, F36). It now hangs in the sales section of the sidebar. This addon
+does not depend on `statamic-payments`: when that addon is installed, its `SuiteNav::section()` is
+asked for the shared section name so both land in the same section (Statamic does not translate
+section names, so two spellings would give two half-filled sections); when it is not, the entry
+gets a section of its own.
+
+Route and permission are unchanged. The entry under Utilities is removed with `Nav::remove`,
+because the first attempt on 04.09. only added the new section next to it and the screen appeared
+twice.
+
+### Fixed: code style on a test stand-in
+
+`tests/Fakes/insights-contracts.php` failed `pint --test` since it arrived in 1.2.0, which kept the
+Code style job red. Formatted. The declarations are unchanged, and `InsightsContractsMatchTest`
+compares signatures by reflection, so nothing it checks has moved.
+
 ## 1.2.0
 
 ### Added: this addon's figures appear in Insights

@@ -9,6 +9,7 @@ use Goldnead\StatamicBooking\Integrations\Insights\HoursBooked;
 use Goldnead\StatamicBooking\Integrations\Insights\Scheduled;
 use Goldnead\StatamicBooking\Support\BookingRecorder;
 use Goldnead\StatamicBooking\Support\SignatureVerifier;
+use Goldnead\StatamicPayments\Cp\SuiteNav;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
@@ -190,8 +191,8 @@ class ServiceProvider extends AddonServiceProvider
             // Route, Recht und Middleware.
             $nav->remove('Tools', 'Utilities', __('statamic-booking::messages.utility_nav'));
 
-            $section = class_exists(\Goldnead\StatamicPayments\Cp\SuiteNav::class)
-                ? \Goldnead\StatamicPayments\Cp\SuiteNav::section()
+            $section = class_exists(SuiteNav::class)
+                ? SuiteNav::section()
                 : __('statamic-booking::messages.utility_nav');
 
             $nav->create(__('statamic-booking::messages.utility_nav'))
