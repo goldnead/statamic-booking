@@ -27,7 +27,7 @@
       "description": "Records Cal.com bookings in Statamic: signed webhooks, idempotent, with a seam for what happens next.",
       "url": "https://github.com/goldnead/statamic-booking",
       "developer": "Adrian Goldner",
-      "developer-url": "https://gldnr.studio"
+      "developer-url": "https://adriangoldner.dev"
     },
     "laravel": {
       "providers": [
