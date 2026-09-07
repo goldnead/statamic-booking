@@ -47,7 +47,7 @@
   },
   "require": {
     "php": "^8.2",
-    "goldnead/statamic-brand-context": "^1.12",
+    "goldnead/statamic-brand-context": "^1.13",
     "statamic/cms": "^6.0"
   },
   "require-dev": {
