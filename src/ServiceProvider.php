@@ -2,18 +2,21 @@
 
 namespace Goldnead\StatamicBooking;
 
+use Goldnead\BrandContext\Settings\SettingsRegistry;
 use Goldnead\StatamicBooking\Http\Controllers\Cp\BookingsController;
 use Goldnead\StatamicBooking\Integrations\Insights\CancellationRate;
 use Goldnead\StatamicBooking\Integrations\Insights\Cancelled;
 use Goldnead\StatamicBooking\Integrations\Insights\HoursBooked;
 use Goldnead\StatamicBooking\Integrations\Insights\Scheduled;
 use Goldnead\StatamicBooking\Support\BookingRecorder;
+use Goldnead\StatamicBooking\Support\Settings;
 use Goldnead\StatamicBooking\Support\SignatureVerifier;
 use Goldnead\StatamicPayments\Cp\SuiteNav;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Statamic\Facades\CP\Nav;
+use Statamic\Facades\Permission;
 use Statamic\Facades\Utility;
 use Statamic\Providers\AddonServiceProvider;
 use Throwable;
@@ -56,11 +59,28 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->scoped(BookingRecorder::class);
     }
 
+    /**
+     * In `boot()`, nicht in `bootAddon()`, und das ist keine Stilfrage.
+     *
+     * brand-context legt die gespeicherten Werte aus einem `app->booted()` auf
+     * die Config, absichtlich erst dann, damit jedes Provider-`boot()` seine
+     * Anmeldung hinter sich hat. `bootAddon()` läuft selbst aus einem
+     * `app->booted()`, und welches der beiden zuerst feuert, hängt an der
+     * Ladereihenfolge der Pakete.
+     */
+    public function boot(): void
+    {
+        parent::boot();
+
+        $this->app->make(SettingsRegistry::class)->register(Settings::class);
+    }
+
     public function bootAddon()
     {
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'statamic-booking');
 
         $this->bootUtility();
+        $this->bootPermissions();
         $this->registerInsightsMetrics();
 
         // Resolved per request rather than baked into a cached route file.
@@ -153,6 +173,26 @@ class ServiceProvider extends AddonServiceProvider
                 ]);
             }
         });
+    }
+
+    /**
+     * Das Recht, das den Abschnitt dieses Addons auf der geteilten
+     * Einstellungsseite freigibt.
+     *
+     * Ein eigenes, nicht `access bookings utility`: wer die Buchungsliste
+     * ansehen darf, darf deshalb noch nicht die Aufbewahrungsfrist oder die
+     * Signaturprüfung verstellen.
+     */
+    protected function bootPermissions(): self
+    {
+        Permission::extend(function (): void {
+            Permission::group('statamic-booking', __('statamic-booking::settings.permission_group'), function (): void {
+                Permission::register('manage booking settings')
+                    ->label(__('statamic-booking::settings.permission_manage'));
+            });
+        });
+
+        return $this;
     }
 
     /**

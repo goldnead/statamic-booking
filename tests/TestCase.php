@@ -4,6 +4,7 @@ namespace Goldnead\StatamicBooking\Tests;
 
 use Goldnead\StatamicBooking\ServiceProvider;
 use Illuminate\Testing\TestResponse;
+use Statamic\Providers\StatamicServiceProvider;
 use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 
@@ -21,11 +22,32 @@ abstract class TestCase extends AddonTestCase
         $app['config']->set('statamic.system.multisite', false);
     }
 
+    /**
+     * Statamics Liste plus brand-context, das die Einstellungs-Schicht stellt
+     * und vor diesem Addon booten muss.
+     */
+    protected function getPackageProviders($app): array
+    {
+        $providers = parent::getPackageProviders($app);
+
+        array_splice(
+            $providers,
+            (int) array_search(StatamicServiceProvider::class, $providers, true) + 1,
+            0,
+            [\Goldnead\BrandContext\ServiceProvider::class]
+        );
+
+        return $providers;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        // Die Marken-Tabelle. Ohne sie kann die Einstellungs-Schicht keine
+        // Marke aufloesen und weigert sich zu speichern.
+        $this->loadMigrationsFrom(__DIR__.'/../vendor/goldnead/statamic-brand-context/database/migrations');
     }
 
     /**
