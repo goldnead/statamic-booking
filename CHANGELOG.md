@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.0
+
+### Changed: the bookings screen shows an empty state instead of HTTP 500 when its table is missing
+
+This addon can be installed without its migrations having run — composer pulls the package in, the
+utility registers itself, the nav item appears, and `bookings` still does not exist. The first
+thing the screen did was ask that table a question, so the visitor got HTTP 500 and a stack trace
+for what is really an unfinished setup. The screen now checks before its first query and renders a
+setup page that names the missing table and says to run `php artisan migrate`.
+
+The reason does not vanish with the 500: the guarded page writes to the log why it turned somebody
+away. Otherwise the site would look installed and never work.
+
 ## 1.4.0
 
 ### New: three operational values in the Control Panel
