@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.4.0
+
+### Neu: drei Betriebswerte im Control Panel
+
+Unter **Einstellungen → Addon-Einstellungen** steht ein Abschnitt für dieses Addon, mit zwei
+Gruppen:
+
+- **Endpunkt:** die Anfragen je Minute und IP, die der Endpunkt annimmt, und das zulässige
+  Alter einer Signatur. Das zweite ist die Grenze, unterhalb derer eine Lieferung noch gilt:
+  eine Signatur sagt nicht, wann sie entstanden ist, ohne diese Grenze bleibt eine
+  mitgeschnittene Lieferung für immer gültig. Leer schaltet die Prüfung ab und ist nur für eine
+  Gegenstelle ohne Zeitstempel vertretbar.
+- **Aufbewahrung:** nach wie vielen Tagen `php please booking:prune` eine vergangene Buchung
+  löscht. Eine Buchung trägt Name und Adresse, das ist eine Datenschutzentscheidung und keine
+  technische. Leer heißt „alles behalten".
+
+Gespeichert wird nur, was jemand ändert; alles andere folgt weiter
+`config/statamic-booking.php`.
+
+Nicht auf der Seite, und die Gruppentexte sagen es: die Endpunkte selbst, weil jeder ein
+Geheimnis trägt und ein Geheimnis in einer Datenbankzeile in jedem Backup und jedem Export
+liegt. Ebenso Signatur-Header, Verfahren und Zeitstempel-Header — der Protokollvertrag mit
+Cal.com. Wer davon einen verstellt, ohne dass die Gegenseite mitzieht, schaltet den Endpunkt
+still ab, denn eine abgewiesene Signatur sieht aus wie ein Angriff und nicht wie ein
+Tippfehler.
+
+Die Anfragebremse steht trotz einer Fundstelle im Service Provider auf der Seite: der Aufruf
+liegt innerhalb der Closure, die `RateLimiter::for()` bekommt, und die läuft je Anfrage, nicht
+beim Booten. Nachgesehen am 07.09.2026.
+
+**Neues Recht `manage booking settings`.** Es hat zunächst niemand, und bis es einer Rolle
+zugewiesen ist, bleibt der Abschnitt unsichtbar. Bestehende Rechte sind unverändert.
+
+**Voraussetzung: `goldnead/statamic-brand-context` ab 1.13.** Ältere Fassungen zeigen die Seite,
+wenden ihre Werte aber nicht verlässlich an: auf einer Installation mit einer einzigen Marke
+kamen die Einstellungen der zuletzt angemeldeten Addons gar nicht an der Config an, und bis 1.12
+löschte ein zweites Speichern desselben Abschnitts die Überschreibung des ersten, ohne Meldung.
+Wer vor dem Update Werte gesetzt hat, prüft danach, ob sie noch dastehen.
+
 ## 1.3.0
 
 ### Changed: the Bookings screen leaves Utilities
