@@ -6,7 +6,9 @@
  */
 
 import BookingsIndex from './pages/Bookings/Index.vue';
+import SetupRequired from './pages/SetupRequired.vue';
 
 Statamic.booting(() => {
     Statamic.$inertia.register('statamic-booking::Bookings/Index', BookingsIndex);
+    Statamic.$inertia.register('statamic-booking::SetupRequired', SetupRequired);
 });

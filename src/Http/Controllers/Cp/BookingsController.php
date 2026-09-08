@@ -4,6 +4,7 @@ namespace Goldnead\StatamicBooking\Http\Controllers\Cp;
 
 use Goldnead\StatamicBooking\Http\Resources\Cp\BookingsCollection;
 use Goldnead\StatamicBooking\Models\Booking;
+use Goldnead\StatamicBooking\Support\Setup;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -37,6 +38,13 @@ class BookingsController extends CpController
         // This is the second lock, for the day someone points a route of their
         // own at this action.
         $this->authorizeAccess();
+
+        // Before the first query, and before the JSON branch below, because
+        // that one queries too: without the migrations there is no `bookings`
+        // table and either path would answer 500 instead of saying so.
+        if ($setup = Setup::guard(__('statamic-booking::messages.utility_title'), 'bookings')) {
+            return $setup;
+        }
 
         if ($request->wantsJson() && ! $request->header('X-Inertia')) {
             return $this->json($request);

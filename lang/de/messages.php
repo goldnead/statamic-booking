@@ -9,6 +9,8 @@ return [
     'empty_heading' => 'Noch keine Buchungen',
     'empty_title' => 'Hier ist noch nichts eingetragen',
     'empty_description' => 'Sobald jemand über Cal.com bucht, erscheint der Termin hier. Bleibt die Liste leer, obwohl gebucht wurde, prüfe das Geheimnis des Endpunkts.',
+    'setup_required_heading' => 'Diese Seite braucht ihre Datenbanktabellen, und die gibt es noch nicht.',
+    'setup_required_description' => 'Führe `php artisan migrate` aus, danach lädt die Seite normal. Der Grund steht auch im Log.',
     'column_when' => 'Termin',
     'column_who' => 'Wer',
     'column_status' => 'Status',

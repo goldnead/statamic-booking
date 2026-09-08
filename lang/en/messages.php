@@ -9,6 +9,8 @@ return [
     'empty_heading' => 'No bookings yet',
     'empty_title' => 'Nothing here yet',
     'empty_description' => 'An appointment appears here as soon as somebody books through Cal.com. If this stays empty although a booking was made, check the endpoint secret.',
+    'setup_required_heading' => 'This page needs its database tables, and they are not there yet.',
+    'setup_required_description' => 'Run `php artisan migrate` and the page loads as usual. The reason is in the log as well.',
     'column_when' => 'Appointment',
     'column_who' => 'Who',
     'column_status' => 'Status',
