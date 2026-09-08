@@ -2,42 +2,40 @@
 
 ## 1.4.0
 
-### Neu: drei Betriebswerte im Control Panel
+### New: three operational values in the Control Panel
 
-Unter **Einstellungen → Addon-Einstellungen** steht ein Abschnitt für dieses Addon, mit zwei
-Gruppen:
+Under **Settings → Addon Settings** there is a section for this addon, with two groups:
 
-- **Endpunkt:** die Anfragen je Minute und IP, die der Endpunkt annimmt, und das zulässige
-  Alter einer Signatur. Das zweite ist die Grenze, unterhalb derer eine Lieferung noch gilt:
-  eine Signatur sagt nicht, wann sie entstanden ist, ohne diese Grenze bleibt eine
-  mitgeschnittene Lieferung für immer gültig. Leer schaltet die Prüfung ab und ist nur für eine
-  Gegenstelle ohne Zeitstempel vertretbar.
-- **Aufbewahrung:** nach wie vielen Tagen `php please booking:prune` eine vergangene Buchung
-  löscht. Eine Buchung trägt Name und Adresse, das ist eine Datenschutzentscheidung und keine
-  technische. Leer heißt „alles behalten".
+- **Endpoint:** the requests per minute and IP the endpoint accepts, and the permitted age of a
+  signature. The second is the limit below which a delivery still counts: a signature does not
+  say when it was created, and without this limit a recorded delivery stays valid forever.
+  Empty switches the check off and is only defensible for a counterpart that sends no
+  timestamp.
+- **Retention:** after how many days `php please booking:prune` deletes a past booking. A
+  booking carries a name and an address, so this is a data protection decision and not a
+  technical one. Empty means "keep everything".
 
-Gespeichert wird nur, was jemand ändert; alles andere folgt weiter
+Only what someone changes is stored; everything else keeps following
 `config/statamic-booking.php`.
 
-Nicht auf der Seite, und die Gruppentexte sagen es: die Endpunkte selbst, weil jeder ein
-Geheimnis trägt und ein Geheimnis in einer Datenbankzeile in jedem Backup und jedem Export
-liegt. Ebenso Signatur-Header, Verfahren und Zeitstempel-Header — der Protokollvertrag mit
-Cal.com. Wer davon einen verstellt, ohne dass die Gegenseite mitzieht, schaltet den Endpunkt
-still ab, denn eine abgewiesene Signatur sieht aus wie ein Angriff und nicht wie ein
-Tippfehler.
+Not on the page, and the group texts say so: the endpoints themselves, because each carries a
+secret and a secret in a database row sits in every backup and every export. Likewise the
+signature header, the algorithm and the timestamp header — the protocol contract with Cal.com.
+Change one of them without the other side following, and the endpoint is switched off silently,
+because a rejected signature looks like an attack and not like a typo.
 
-Die Anfragebremse steht trotz einer Fundstelle im Service Provider auf der Seite: der Aufruf
-liegt innerhalb der Closure, die `RateLimiter::for()` bekommt, und die läuft je Anfrage, nicht
-beim Booten. Nachgesehen am 07.09.2026.
+The rate limit is on the page despite a hit in the service provider: the call sits inside the
+closure passed to `RateLimiter::for()`, and that closure runs per request, not at boot. Checked
+on 07.09.2026.
 
-**Neues Recht `manage booking settings`.** Es hat zunächst niemand, und bis es einer Rolle
-zugewiesen ist, bleibt der Abschnitt unsichtbar. Bestehende Rechte sind unverändert.
+**New permission `manage booking settings`.** Nobody holds it at first, and until it is assigned
+to a role the section stays invisible. Existing permissions are unchanged.
 
-**Voraussetzung: `goldnead/statamic-brand-context` ab 1.13.** Ältere Fassungen zeigen die Seite,
-wenden ihre Werte aber nicht verlässlich an: auf einer Installation mit einer einzigen Marke
-kamen die Einstellungen der zuletzt angemeldeten Addons gar nicht an der Config an, und bis 1.12
-löschte ein zweites Speichern desselben Abschnitts die Überschreibung des ersten, ohne Meldung.
-Wer vor dem Update Werte gesetzt hat, prüft danach, ob sie noch dastehen.
+**Requires `goldnead/statamic-brand-context` 1.13 or later.** Older versions show the page but
+do not apply its values reliably: on an installation with a single brand, the settings of the
+addons that registered last never reached the config at all, and up to 1.12 saving the same
+section a second time deleted the first save's override, without a message. If you set values
+before the update, check afterwards that they are still there.
 
 ## 1.3.0
 
