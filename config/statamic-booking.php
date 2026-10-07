@@ -36,6 +36,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Table
+    |--------------------------------------------------------------------------
+    |
+    | Where the rows live. `bookings` unless your site already has a table of
+    | that name — then choose another one here BEFORE the first migrate.
+    | Changing it later leaves the old table, and every row in it, behind.
+    |
+    */
+
+    'table' => 'bookings',
+
+    /*
+    |--------------------------------------------------------------------------
     | Signature
     |--------------------------------------------------------------------------
     |

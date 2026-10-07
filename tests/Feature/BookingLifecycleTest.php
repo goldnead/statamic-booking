@@ -243,7 +243,12 @@ class BookingLifecycleTest extends TestCase
         $this->deliver($this->created(['triggerEvent' => 'BOOKING_REQUESTED']));
         $this->deliver($this->created());
 
+        // This test used to assert zero events and no status, which pinned the
+        // bug it is named after: the confirmation found the requested row,
+        // left it on `requested`, and told nobody. Cal.com sends exactly this
+        // pair when an organiser accepts a request.
         $this->assertSame(1, Booking::count());
-        Event::assertDispatchedTimes(BookingMade::class, 0);
+        $this->assertSame(Booking::STATUS_BOOKED, Booking::first()->status);
+        Event::assertDispatchedTimes(BookingMade::class, 1);
     }
 }

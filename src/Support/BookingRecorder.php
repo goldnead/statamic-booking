@@ -4,10 +4,12 @@ namespace Goldnead\StatamicBooking\Support;
 
 use Goldnead\StatamicBooking\Events\BookingCancelled;
 use Goldnead\StatamicBooking\Events\BookingMade;
+use Goldnead\StatamicBooking\Events\BookingRequested;
 use Goldnead\StatamicBooking\Events\BookingRescheduled;
 use Goldnead\StatamicBooking\Models\Booking;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Turns one provider payload into one row, and says what happened.
@@ -33,7 +35,17 @@ class BookingRecorder
             return null;
         }
 
-        return match ($trigger) {
+        /*
+         * One transaction around the row AND its listeners.
+         *
+         * Events fire once per real change, so a redelivery finds the row and
+         * fires nothing. Without the transaction a listener that threw left the
+         * row behind: the provider got a 500, retried, found the row, and the
+         * consequence (a credit held, a mail sent) was lost for good while the
+         * booking looked recorded. Rolled back, the retry is a first delivery
+         * again and the listener gets its second chance.
+         */
+        return DB::transaction(fn () => match ($trigger) {
             'BOOKING_CREATED' => $this->create($endpoint, $externalId, $event),
 
             // A booking that needs confirming arrives as REQUESTED first, and
@@ -48,10 +60,10 @@ class BookingRecorder
             // ignoring it left the row on `booked` forever, so a request the
             // organiser declined stayed in `{{ bookings }}` as an appointment
             // that will never happen.
-            'BOOKING_CANCELLED', 'BOOKING_REJECTED' => $this->cancel($endpoint, $externalId, $trigger),
+            'BOOKING_CANCELLED', 'BOOKING_REJECTED' => $this->cancel($endpoint, $externalId, $event, $trigger),
 
             default => null,
-        };
+        });
     }
 
     /**
@@ -73,7 +85,29 @@ class BookingRecorder
         );
 
         if ($booking->wasRecentlyCreated) {
-            BookingMade::dispatch($booking);
+            BookingMade::dispatch($booking, $event);
+
+            return $booking;
+        }
+
+        /*
+         * The organiser accepted a request. Cal.com sends CREATED with the uid
+         * the REQUESTED carried, so the row is already there — and until 1.6
+         * that was read as a redelivery: the row stayed on `requested`, never
+         * showed as upcoming, and nobody heard that the appointment now exists.
+         * Promoted under a lock so two deliveries of the acceptance cannot both
+         * fire.
+         */
+        if ($booking->status === Booking::STATUS_REQUESTED) {
+            $locked = Booking::query()->whereKey($booking->getKey())->lockForUpdate()->first();
+
+            if ($locked && $locked->status === Booking::STATUS_REQUESTED && ! $locked->isCancelled()) {
+                $locked->fill($attributes)->save();
+
+                BookingMade::dispatch($locked, $event);
+
+                return $locked;
+            }
         }
 
         return $booking;
@@ -89,9 +123,13 @@ class BookingRecorder
             $this->attributes($event) + ['status' => Booking::STATUS_REQUESTED, 'cancelled_at' => null],
         );
 
-        // No event. Nothing has been agreed yet, and telling listeners "a
-        // booking was made" would have them send a confirmation for an
-        // appointment the organiser may still decline.
+        // Its own event, not BookingMade. Nothing has been agreed yet, and
+        // telling listeners "a booking was made" would have them send a
+        // confirmation for an appointment the organiser may still decline.
+        if ($booking->wasRecentlyCreated) {
+            BookingRequested::dispatch($booking, $event);
+        }
+
         return $booking;
     }
 
@@ -101,6 +139,21 @@ class BookingRecorder
     protected function reschedule(string $endpoint, string $externalId, array $event): Booking
     {
         $existing = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->first();
+        $previousExternalId = null;
+
+        /*
+         * Cal.com does not move a booking, it replaces it: the reschedule
+         * arrives with a NEW uid, and the old one in `rescheduleUid`. Looked up
+         * by the new uid alone, every reschedule was a booking nobody had heard
+         * of — a second row, a BookingMade, and the original still upcoming.
+         * The original row now follows its appointment to the new uid.
+         */
+        $previous = Arr::get($event, 'rescheduleUid');
+
+        if (! $existing && is_string($previous) && $previous !== '' && $previous !== $externalId) {
+            $existing = Booking::where('endpoint', $endpoint)->where('external_id', $previous)->lockForUpdate()->first();
+            $previousExternalId = $existing ? $previous : null;
+        }
 
         // A reschedule that arrives after a cancellation must not resurrect it.
         // Providers retry on any non-2xx and the order is not guaranteed, so
@@ -121,25 +174,38 @@ class BookingRecorder
             );
 
             if ($booking->wasRecentlyCreated) {
-                BookingMade::dispatch($booking);
+                BookingMade::dispatch($booking, $event);
             }
 
             return $booking;
         }
 
         $existing->fill($this->attributes($event) + [
+            'external_id' => $externalId,
             'status' => Booking::STATUS_RESCHEDULED,
             'cancelled_at' => null,
-        ])->save();
+        ]);
 
-        BookingRescheduled::dispatch($existing);
+        // A redelivered reschedule changes nothing and says nothing. Only the
+        // first delivery moves the row; a listener told twice would move its
+        // own record twice.
+        if (! $existing->isDirty()) {
+            return $existing;
+        }
+
+        $existing->save();
+
+        BookingRescheduled::dispatch($existing, $event, $previousExternalId);
 
         return $existing;
     }
 
-    protected function cancel(string $endpoint, string $externalId, string $trigger = 'BOOKING_CANCELLED'): ?Booking
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    protected function cancel(string $endpoint, string $externalId, array $event, string $trigger = 'BOOKING_CANCELLED'): ?Booking
     {
-        $booking = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->first();
+        $booking = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->lockForUpdate()->first();
 
         if (! $booking || $booking->isCancelled()) {
             return $booking;
@@ -150,7 +216,7 @@ class BookingRecorder
             'cancelled_at' => now(),
         ])->save();
 
-        BookingCancelled::dispatch($booking);
+        BookingCancelled::dispatch($booking, $event);
 
         return $booking;
     }
