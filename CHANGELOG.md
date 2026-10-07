@@ -18,6 +18,14 @@ in `rescheduleUid`. Looked up by the new uid alone, every reschedule recorded a 
 `BookingRescheduled` carries the old one in `previousExternalId`. A redelivered reschedule fires
 nothing.
 
+### Fixed: a cancellation for an unknown booking was dropped
+
+A cancellation whose booking the addon had never recorded was ignored. A site that knew the
+booking from elsewhere (an import, the system before this one) never heard it was called off, and
+a cancellation that overtook its own `BOOKING_CREATED` was undone by the late creation. It is now
+recorded as cancelled and `BookingCancelled` fires; the late creation finds the row and does
+nothing.
+
 ### Fixed: a failing listener lost its consequence for good
 
 The row was written before the listeners ran. When a listener threw, the provider got a 500 and

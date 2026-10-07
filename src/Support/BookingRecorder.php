@@ -205,14 +205,38 @@ class BookingRecorder
      */
     protected function cancel(string $endpoint, string $externalId, array $event, string $trigger = 'BOOKING_CANCELLED'): ?Booking
     {
+        $status = $trigger === 'BOOKING_REJECTED' ? Booking::STATUS_REJECTED : Booking::STATUS_CANCELLED;
+
         $booking = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->lockForUpdate()->first();
 
-        if (! $booking || $booking->isCancelled()) {
+        if (! $booking) {
+            /*
+             * A cancellation for a booking this addon never saw. Dropping it
+             * (as before 1.6) lost two things: a site that knew the booking
+             * from elsewhere (an import, the system before this one) never
+             * heard it was called off; and when the cancellation overtook its
+             * own CREATED, the late CREATED then recorded an appointment that
+             * no longer exists. Recorded as cancelled, the late CREATED finds
+             * the row and does nothing.
+             */
+            $booking = Booking::createOrFirst(
+                ['endpoint' => $endpoint, 'external_id' => $externalId],
+                $this->attributes($event) + ['status' => $status, 'cancelled_at' => now()],
+            );
+
+            if ($booking->wasRecentlyCreated) {
+                BookingCancelled::dispatch($booking, $event);
+            }
+
+            return $booking;
+        }
+
+        if ($booking->isCancelled()) {
             return $booking;
         }
 
         $booking->forceFill([
-            'status' => $trigger === 'BOOKING_REJECTED' ? Booking::STATUS_REJECTED : Booking::STATUS_CANCELLED,
+            'status' => $status,
             'cancelled_at' => now(),
         ])->save();
 

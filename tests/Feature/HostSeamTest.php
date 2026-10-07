@@ -112,6 +112,31 @@ class HostSeamTest extends TestCase
     }
 
     #[Test]
+    public function a_cancellation_for_an_unknown_booking_is_passed_on_and_wins_over_a_late_creation(): void
+    {
+        Event::fake([BookingCancelled::class, BookingMade::class]);
+        $this->travelTo('2026-08-01 12:00:00');
+
+        // A booking the site knew from somewhere else (an import, the system
+        // before this one), or a CREATED that has not arrived yet.
+        $this->deliver($this->created(['triggerEvent' => 'BOOKING_CANCELLED']))
+            ->assertOk()
+            ->assertJson(['recorded' => true]);
+
+        Event::assertDispatchedTimes(BookingCancelled::class, 1);
+
+        // The overtaken CREATED arrives late. The appointment no longer exists.
+        $this->deliver($this->created());
+        $this->deliver($this->created(['triggerEvent' => 'BOOKING_CANCELLED']));
+
+        $this->assertSame(1, Booking::count());
+        $this->assertTrue(Booking::first()->isCancelled());
+        $this->assertSame(0, Booking::query()->upcoming()->count());
+        Event::assertNotDispatched(BookingMade::class);
+        Event::assertDispatchedTimes(BookingCancelled::class, 1);
+    }
+
+    #[Test]
     public function a_failing_listener_leaves_nothing_behind_so_the_retry_runs_it_again(): void
     {
         $calls = 0;
