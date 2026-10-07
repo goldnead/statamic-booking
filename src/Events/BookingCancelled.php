@@ -11,10 +11,19 @@ use Illuminate\Foundation\Events\Dispatchable;
  * Dispatched once per real change, never on a redelivery — the recorder only
  * fires when the row actually moved. A listener may therefore assume it is
  * being told something new.
+ *
+ * Covers both "the visitor cancelled" and "the organiser declined a request";
+ * `$booking->status` says which.
  */
 class BookingCancelled
 {
     use Dispatchable;
 
-    public function __construct(public readonly Booking $booking) {}
+    /**
+     * @param  array<string, mixed>  $payload  The provider's booking object as delivered. See {@see BookingMade}.
+     */
+    public function __construct(
+        public readonly Booking $booking,
+        public readonly array $payload = [],
+    ) {}
 }

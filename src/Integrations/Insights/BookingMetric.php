@@ -44,7 +44,7 @@ abstract class BookingMetric extends TableMetric
 {
     protected function table(): string
     {
-        return 'bookings';
+        return Booking::tableName();
     }
 
     public function group(): string

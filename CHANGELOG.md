@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.6.0 (2026-10-07)
+
+### Fixed: an accepted request never became a booking
+
+Cal.com sends `BOOKING_REQUESTED` when somebody asks for an event type that needs confirming, and
+`BOOKING_CREATED` with the **same** uid when the organiser accepts. The second delivery found the
+requested row and was treated as a redelivery: the row stayed on `requested`, never showed as
+upcoming, and `BookingMade` never fired. It is now promoted to `booked` and `BookingMade` fires
+once.
+
+### Fixed: a reschedule became a second booking
+
+Cal.com replaces a rescheduled booking with a new one and sends the new uid in `uid`, the old one
+in `rescheduleUid`. Looked up by the new uid alone, every reschedule recorded a second row, fired
+`BookingMade`, and left the original upcoming. The original row now moves to the new uid, and
+`BookingRescheduled` carries the old one in `previousExternalId`. A redelivered reschedule fires
+nothing. The row remembers its old uids (`meta.moved_from`), so a late redelivery for the old uid
+does not bring the old slot back, and a cancellation that overtakes its reschedule closes the
+original as well. A request that is moved stays a request.
+
+### Fixed: a cancellation for an unknown booking was dropped
+
+A cancellation whose booking the addon had never recorded was ignored. A site that knew the
+booking from elsewhere (an import, the system before this one) never heard it was called off, and
+a cancellation that overtook its own `BOOKING_CREATED` was undone by the late creation. It is now
+recorded as cancelled and `BookingCancelled` fires; the late creation finds the row and does
+nothing.
+
+### Fixed: a failing listener lost its consequence for good
+
+The row was written before the listeners ran. When a listener threw, the provider got a 500 and
+retried, the retry found the row and fired nothing. Row and listeners now share one transaction,
+so a failure leaves nothing behind and the retry runs every listener again.
+
+### New: the provider's payload on every event, and `BookingRequested`
+
+`BookingMade`, `BookingRescheduled` and `BookingCancelled` carry `$payload`, the booking object as
+the provider delivered it, so a site can act on link `metadata` or form `responses` without a
+second webhook. `BookingRequested` is new and fires for a request that still needs confirming.
+All new constructor arguments are optional; existing listeners keep working.
+
+### New: `table`
+
+The table name is configurable. A site that already had a `bookings` table could not install the
+addon, because the migration failed. Set `table` before the first migrate.
+
 ## 1.5.0
 
 ### Changed: the bookings screen shows an empty state instead of HTTP 500 when its table is missing

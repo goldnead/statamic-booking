@@ -39,6 +39,26 @@ class Booking extends Model
     protected $guarded = [];
 
     /**
+     * The table, from `statamic-booking.table`.
+     *
+     * A site that already has a `bookings` table of its own is the normal case
+     * rather than an exotic one; without a choice the migration fails on
+     * install. Read on every call so the model, the migration, the CP guard
+     * and the insights metrics cannot disagree.
+     */
+    public static function tableName(): string
+    {
+        $table = config('statamic-booking.table');
+
+        return is_string($table) && $table !== '' ? $table : 'bookings';
+    }
+
+    public function getTable(): string
+    {
+        return static::tableName();
+    }
+
+    /**
      * Every status this package writes.
      *
      * One list, so the filter, the screen and the model cannot drift apart.

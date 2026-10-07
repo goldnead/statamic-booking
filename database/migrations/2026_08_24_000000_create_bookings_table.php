@@ -1,5 +1,6 @@
 <?php
 
+use Goldnead\StatamicBooking\Models\Booking;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,7 +9,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('bookings', function (Blueprint $table) {
+        // `statamic-booking.table`, default `bookings`. Set it BEFORE the first
+        // migrate on a site that already has a `bookings` table of its own;
+        // changing it afterwards leaves the old table behind with its rows.
+        Schema::create(Booking::tableName(), function (Blueprint $table) {
             $table->id();
 
             // Which configured endpoint this came through. A site can run several
@@ -48,6 +52,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('bookings');
+        Schema::dropIfExists(Booking::tableName());
     }
 };

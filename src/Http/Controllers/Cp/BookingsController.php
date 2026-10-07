@@ -42,7 +42,7 @@ class BookingsController extends CpController
         // Before the first query, and before the JSON branch below, because
         // that one queries too: without the migrations there is no `bookings`
         // table and either path would answer 500 instead of saying so.
-        if ($setup = Setup::guard(__('statamic-booking::messages.utility_title'), 'bookings')) {
+        if ($setup = Setup::guard(__('statamic-booking::messages.utility_title'), Booking::tableName())) {
             return $setup;
         }
 

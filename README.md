@@ -54,7 +54,7 @@ may post here".
 
 ### Reacting
 
-Three events, each dispatched **once per real change** — never on a redelivery, so a listener may
+Four events, each dispatched **once per real change** — never on a redelivery, so a listener may
 assume it is being told something new:
 
 ```php
@@ -70,6 +70,32 @@ Event::listen(BookingMade::class, function (BookingMade $event) {
 `BookingRescheduled` and `BookingCancelled` work the same way. A cancellation **keeps** the row and
 stamps `cancelled_at`: "there was an appointment and it was cancelled" is a different fact from
 "there never was one", and only one of them can be reconstructed later.
+
+`BookingRequested` fires when an event type that needs confirming receives a request. It is not
+an appointment yet; if the organiser accepts, `BookingMade` follows for the same row, if they
+decline, `BookingCancelled` with status `rejected`.
+
+**Every event carries `$event->payload`**, the provider's booking object as delivered (Cal.com's
+`payload` key). The row keeps what every site needs; whatever your site hangs its own consequences
+on (`metadata` from the booking link, form `responses`) is there. It holds personal data and is not
+stored.
+
+**Cal.com gives a rescheduled booking a new id.** The row follows the appointment to the new id
+(sent as `uid`, with the old one in `rescheduleUid`), so a reschedule is one `BookingRescheduled`
+and never a second booking. Whatever your site keyed on the old id finds it in
+`$event->previousExternalId`.
+
+**A listener that throws is retried.** The row and its listeners run in one transaction: if a
+listener fails, nothing is recorded, the provider gets a 500 and delivers again, and the retry is a
+first delivery for every listener. A listener that must not be retried catches its own exception.
+A **queued** listener should set `public $afterCommit = true;`, otherwise its job is queued inside
+the transaction and survives a rollback.
+
+**Order is not guaranteed, and the addon copes:** a cancellation for a booking it never saw is
+recorded as cancelled (and `BookingCancelled` fires, so a site that knew the booking from elsewhere
+hears of it); a late `BOOKING_CREATED` after that does nothing; a late redelivery for the old uid of
+a moved booking finds the moved row; a cancellation that overtakes its own reschedule closes the
+original too.
 
 ### Tags
 
@@ -115,6 +141,7 @@ Every key lives in `config/statamic-booking.php`.
 | Key | Default | What happens when it is wrong |
 |---|---|---|
 | `endpoints` | none | An endpoint without a `secret` refuses every request. Renaming a handle after the first booking orphans every row that carries it. |
+| `table` | `bookings` | If your site already has a `bookings` table, the first migrate fails. Set another name **before** it; changing it afterwards leaves the old table and its rows behind. |
 | `signature.header` | `X-Cal-Signature-256` | A wrong header name means every delivery is refused as unsigned. |
 | `signature.timestamp_header` | `null` | Without one, a captured delivery can be replayed forever. Naming a header your provider does not send refuses every delivery. |
 | `signature.tolerance_seconds` | `300` | Too tight and clock drift refuses real deliveries; too loose and a replay window opens. |

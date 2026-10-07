@@ -4,10 +4,12 @@ namespace Goldnead\StatamicBooking\Support;
 
 use Goldnead\StatamicBooking\Events\BookingCancelled;
 use Goldnead\StatamicBooking\Events\BookingMade;
+use Goldnead\StatamicBooking\Events\BookingRequested;
 use Goldnead\StatamicBooking\Events\BookingRescheduled;
 use Goldnead\StatamicBooking\Models\Booking;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Turns one provider payload into one row, and says what happened.
@@ -33,7 +35,17 @@ class BookingRecorder
             return null;
         }
 
-        return match ($trigger) {
+        /*
+         * One transaction around the row AND its listeners.
+         *
+         * Events fire once per real change, so a redelivery finds the row and
+         * fires nothing. Without the transaction a listener that threw left the
+         * row behind: the provider got a 500, retried, found the row, and the
+         * consequence (a credit held, a mail sent) was lost for good while the
+         * booking looked recorded. Rolled back, the retry is a first delivery
+         * again and the listener gets its second chance.
+         */
+        return DB::transaction(fn () => match ($trigger) {
             'BOOKING_CREATED' => $this->create($endpoint, $externalId, $event),
 
             // A booking that needs confirming arrives as REQUESTED first, and
@@ -48,10 +60,10 @@ class BookingRecorder
             // ignoring it left the row on `booked` forever, so a request the
             // organiser declined stayed in `{{ bookings }}` as an appointment
             // that will never happen.
-            'BOOKING_CANCELLED', 'BOOKING_REJECTED' => $this->cancel($endpoint, $externalId, $trigger),
+            'BOOKING_CANCELLED', 'BOOKING_REJECTED' => $this->cancel($endpoint, $externalId, $event, $trigger),
 
             default => null,
-        };
+        });
     }
 
     /**
@@ -64,6 +76,12 @@ class BookingRecorder
             'cancelled_at' => null,
         ];
 
+        // A late redelivery for an appointment that has since moved to a new
+        // uid. Recording it would bring the old slot back as a second booking.
+        if ($moved = $this->movedFrom($endpoint, $externalId)) {
+            return $moved;
+        }
+
         // firstOrCreate against the unique key, not updateOrCreate: a
         // redelivered "created" must not overwrite a booking the visitor has
         // since rescheduled. The database holds the invariant either way.
@@ -73,7 +91,29 @@ class BookingRecorder
         );
 
         if ($booking->wasRecentlyCreated) {
-            BookingMade::dispatch($booking);
+            BookingMade::dispatch($booking, $event);
+
+            return $booking;
+        }
+
+        /*
+         * The organiser accepted a request. Cal.com sends CREATED with the uid
+         * the REQUESTED carried, so the row is already there — and until 1.6
+         * that was read as a redelivery: the row stayed on `requested`, never
+         * showed as upcoming, and nobody heard that the appointment now exists.
+         * Promoted under a lock so two deliveries of the acceptance cannot both
+         * fire.
+         */
+        if ($booking->status === Booking::STATUS_REQUESTED) {
+            $locked = Booking::query()->whereKey($booking->getKey())->lockForUpdate()->first();
+
+            if ($locked && $locked->status === Booking::STATUS_REQUESTED && ! $locked->isCancelled()) {
+                $locked->fill($this->keepingMeta($locked, $attributes))->save();
+
+                BookingMade::dispatch($locked, $event);
+
+                return $locked;
+            }
         }
 
         return $booking;
@@ -84,14 +124,22 @@ class BookingRecorder
      */
     protected function request(string $endpoint, string $externalId, array $event): Booking
     {
+        if ($moved = $this->movedFrom($endpoint, $externalId)) {
+            return $moved;
+        }
+
         $booking = Booking::firstOrCreate(
             ['endpoint' => $endpoint, 'external_id' => $externalId],
             $this->attributes($event) + ['status' => Booking::STATUS_REQUESTED, 'cancelled_at' => null],
         );
 
-        // No event. Nothing has been agreed yet, and telling listeners "a
-        // booking was made" would have them send a confirmation for an
-        // appointment the organiser may still decline.
+        // Its own event, not BookingMade. Nothing has been agreed yet, and
+        // telling listeners "a booking was made" would have them send a
+        // confirmation for an appointment the organiser may still decline.
+        if ($booking->wasRecentlyCreated) {
+            BookingRequested::dispatch($booking, $event);
+        }
+
         return $booking;
     }
 
@@ -100,7 +148,37 @@ class BookingRecorder
      */
     protected function reschedule(string $endpoint, string $externalId, array $event): Booking
     {
-        $existing = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->first();
+        $existing = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->lockForUpdate()->first();
+        $previousExternalId = null;
+
+        /*
+         * Cal.com does not move a booking, it replaces it: the reschedule
+         * arrives with a NEW uid, and the old one in `rescheduleUid`. Looked up
+         * by the new uid alone, every reschedule was a booking nobody had heard
+         * of — a second row, a BookingMade, and the original still upcoming.
+         * The original row now follows its appointment to the new uid.
+         */
+        $previous = Arr::get($event, 'rescheduleUid');
+        $original = is_string($previous) && $previous !== '' && $previous !== $externalId
+            ? Booking::where('endpoint', $endpoint)->where('external_id', $previous)->lockForUpdate()->first()
+            : null;
+
+        if ($existing && $original && ! $original->isCancelled()) {
+            /*
+             * Something for the new uid overtook the reschedule (most often
+             * its cancellation). The new uid has its own row now, so the
+             * original cannot move there; but it no longer exists either.
+             * Left alone it would stay upcoming for good.
+             */
+            // The payload is the reschedule's; its `uid` is the new one, so it
+            // is pointed back at the row being closed.
+            $this->close($original, Booking::STATUS_CANCELLED, ['uid' => $original->external_id] + $event);
+        }
+
+        if (! $existing && $original) {
+            $existing = $original;
+            $previousExternalId = $previous;
+        }
 
         // A reschedule that arrives after a cancellation must not resurrect it.
         // Providers retry on any non-2xx and the order is not guaranteed, so
@@ -121,38 +199,128 @@ class BookingRecorder
             );
 
             if ($booking->wasRecentlyCreated) {
-                BookingMade::dispatch($booking);
+                BookingMade::dispatch($booking, $event);
             }
 
             return $booking;
         }
 
-        $existing->fill($this->attributes($event) + [
-            'status' => Booking::STATUS_RESCHEDULED,
-            'cancelled_at' => null,
-        ])->save();
+        $attributes = $this->keepingMeta($existing, $this->attributes($event));
 
-        BookingRescheduled::dispatch($existing);
+        if ($previousExternalId !== null) {
+            // Remembered, so a late redelivery for the old uid (a CREATED that
+            // timed out the first time) finds this row instead of recording
+            // the appointment a second time.
+            $attributes['meta']['moved_from'] = array_values(array_unique([
+                ...(array) ($attributes['meta']['moved_from'] ?? []),
+                $previousExternalId,
+            ]));
+        }
+
+        $existing->fill($attributes + [
+            'external_id' => $externalId,
+            // A request that is moved is still a request: nothing has been
+            // agreed, and `rescheduled` would make it upcoming.
+            'status' => $existing->status === Booking::STATUS_REQUESTED ? Booking::STATUS_REQUESTED : Booking::STATUS_RESCHEDULED,
+            'cancelled_at' => null,
+        ]);
+
+        // A redelivered reschedule changes nothing and says nothing. Only the
+        // first delivery moves the row; a listener told twice would move its
+        // own record twice.
+        if (! $existing->isDirty()) {
+            return $existing;
+        }
+
+        $existing->save();
+
+        BookingRescheduled::dispatch($existing, $event, $previousExternalId);
 
         return $existing;
     }
 
-    protected function cancel(string $endpoint, string $externalId, string $trigger = 'BOOKING_CANCELLED'): ?Booking
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    protected function cancel(string $endpoint, string $externalId, array $event, string $trigger = 'BOOKING_CANCELLED'): ?Booking
     {
-        $booking = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->first();
+        $status = $trigger === 'BOOKING_REJECTED' ? Booking::STATUS_REJECTED : Booking::STATUS_CANCELLED;
 
-        if (! $booking || $booking->isCancelled()) {
+        $booking = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->lockForUpdate()->first();
+
+        // The uid of an appointment that has since moved. Cal.com closes the
+        // old booking itself when it reschedules; the appointment lives on
+        // under its new uid and must not be cancelled through the old one.
+        if (! $booking && ($moved = $this->movedFrom($endpoint, $externalId))) {
+            return $moved;
+        }
+
+        if (! $booking) {
+            /*
+             * A cancellation for a booking this addon never saw. Dropping it
+             * (as before 1.6) lost two things: a site that knew the booking
+             * from elsewhere (an import, the system before this one) never
+             * heard it was called off; and when the cancellation overtook its
+             * own CREATED, the late CREATED then recorded an appointment that
+             * no longer exists. Recorded as cancelled, the late CREATED finds
+             * the row and does nothing.
+             */
+            $booking = Booking::createOrFirst(
+                ['endpoint' => $endpoint, 'external_id' => $externalId],
+                $this->attributes($event) + ['status' => $status, 'cancelled_at' => now()],
+            );
+
+            if ($booking->wasRecentlyCreated) {
+                BookingCancelled::dispatch($booking, $event);
+            }
+
             return $booking;
         }
 
+        if ($booking->isCancelled()) {
+            return $booking;
+        }
+
+        $this->close($booking, $status, $event);
+
+        return $booking;
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    protected function close(Booking $booking, string $status, array $event): void
+    {
         $booking->forceFill([
-            'status' => $trigger === 'BOOKING_REJECTED' ? Booking::STATUS_REJECTED : Booking::STATUS_CANCELLED,
+            'status' => $status,
             'cancelled_at' => now(),
         ])->save();
 
-        BookingCancelled::dispatch($booking);
+        BookingCancelled::dispatch($booking, $event);
+    }
 
-        return $booking;
+    /**
+     * The row an appointment moved to, found by a uid it had before.
+     */
+    protected function movedFrom(string $endpoint, string $externalId): ?Booking
+    {
+        return Booking::where('endpoint', $endpoint)
+            ->whereJsonContains('meta->moved_from', $externalId)
+            ->first();
+    }
+
+    /**
+     * Fresh attributes for a row that already exists, without dropping what
+     * the row remembers beyond them (`meta.moved_from`).
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function keepingMeta(Booking $booking, array $attributes): array
+    {
+        $attributes['meta'] = array_merge((array) $booking->meta, (array) ($attributes['meta'] ?? []));
+
+        return $attributes;
     }
 
     /**
