@@ -76,6 +76,12 @@ class BookingRecorder
             'cancelled_at' => null,
         ];
 
+        // A late redelivery for an appointment that has since moved to a new
+        // uid. Recording it would bring the old slot back as a second booking.
+        if ($moved = $this->movedFrom($endpoint, $externalId)) {
+            return $moved;
+        }
+
         // firstOrCreate against the unique key, not updateOrCreate: a
         // redelivered "created" must not overwrite a booking the visitor has
         // since rescheduled. The database holds the invariant either way.
@@ -102,7 +108,7 @@ class BookingRecorder
             $locked = Booking::query()->whereKey($booking->getKey())->lockForUpdate()->first();
 
             if ($locked && $locked->status === Booking::STATUS_REQUESTED && ! $locked->isCancelled()) {
-                $locked->fill($attributes)->save();
+                $locked->fill($this->keepingMeta($locked, $attributes))->save();
 
                 BookingMade::dispatch($locked, $event);
 
@@ -118,6 +124,10 @@ class BookingRecorder
      */
     protected function request(string $endpoint, string $externalId, array $event): Booking
     {
+        if ($moved = $this->movedFrom($endpoint, $externalId)) {
+            return $moved;
+        }
+
         $booking = Booking::firstOrCreate(
             ['endpoint' => $endpoint, 'external_id' => $externalId],
             $this->attributes($event) + ['status' => Booking::STATUS_REQUESTED, 'cancelled_at' => null],
@@ -138,7 +148,7 @@ class BookingRecorder
      */
     protected function reschedule(string $endpoint, string $externalId, array $event): Booking
     {
-        $existing = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->first();
+        $existing = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->lockForUpdate()->first();
         $previousExternalId = null;
 
         /*
@@ -149,10 +159,25 @@ class BookingRecorder
          * The original row now follows its appointment to the new uid.
          */
         $previous = Arr::get($event, 'rescheduleUid');
+        $original = is_string($previous) && $previous !== '' && $previous !== $externalId
+            ? Booking::where('endpoint', $endpoint)->where('external_id', $previous)->lockForUpdate()->first()
+            : null;
 
-        if (! $existing && is_string($previous) && $previous !== '' && $previous !== $externalId) {
-            $existing = Booking::where('endpoint', $endpoint)->where('external_id', $previous)->lockForUpdate()->first();
-            $previousExternalId = $existing ? $previous : null;
+        if ($existing && $original && ! $original->isCancelled()) {
+            /*
+             * Something for the new uid overtook the reschedule (most often
+             * its cancellation). The new uid has its own row now, so the
+             * original cannot move there; but it no longer exists either.
+             * Left alone it would stay upcoming for good.
+             */
+            // The payload is the reschedule's; its `uid` is the new one, so it
+            // is pointed back at the row being closed.
+            $this->close($original, Booking::STATUS_CANCELLED, ['uid' => $original->external_id] + $event);
+        }
+
+        if (! $existing && $original) {
+            $existing = $original;
+            $previousExternalId = $previous;
         }
 
         // A reschedule that arrives after a cancellation must not resurrect it.
@@ -180,9 +205,23 @@ class BookingRecorder
             return $booking;
         }
 
-        $existing->fill($this->attributes($event) + [
+        $attributes = $this->keepingMeta($existing, $this->attributes($event));
+
+        if ($previousExternalId !== null) {
+            // Remembered, so a late redelivery for the old uid (a CREATED that
+            // timed out the first time) finds this row instead of recording
+            // the appointment a second time.
+            $attributes['meta']['moved_from'] = array_values(array_unique([
+                ...(array) ($attributes['meta']['moved_from'] ?? []),
+                $previousExternalId,
+            ]));
+        }
+
+        $existing->fill($attributes + [
             'external_id' => $externalId,
-            'status' => Booking::STATUS_RESCHEDULED,
+            // A request that is moved is still a request: nothing has been
+            // agreed, and `rescheduled` would make it upcoming.
+            'status' => $existing->status === Booking::STATUS_REQUESTED ? Booking::STATUS_REQUESTED : Booking::STATUS_RESCHEDULED,
             'cancelled_at' => null,
         ]);
 
@@ -208,6 +247,13 @@ class BookingRecorder
         $status = $trigger === 'BOOKING_REJECTED' ? Booking::STATUS_REJECTED : Booking::STATUS_CANCELLED;
 
         $booking = Booking::where('endpoint', $endpoint)->where('external_id', $externalId)->lockForUpdate()->first();
+
+        // The uid of an appointment that has since moved. Cal.com closes the
+        // old booking itself when it reschedules; the appointment lives on
+        // under its new uid and must not be cancelled through the old one.
+        if (! $booking && ($moved = $this->movedFrom($endpoint, $externalId))) {
+            return $moved;
+        }
 
         if (! $booking) {
             /*
@@ -235,14 +281,46 @@ class BookingRecorder
             return $booking;
         }
 
+        $this->close($booking, $status, $event);
+
+        return $booking;
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    protected function close(Booking $booking, string $status, array $event): void
+    {
         $booking->forceFill([
             'status' => $status,
             'cancelled_at' => now(),
         ])->save();
 
         BookingCancelled::dispatch($booking, $event);
+    }
 
-        return $booking;
+    /**
+     * The row an appointment moved to, found by a uid it had before.
+     */
+    protected function movedFrom(string $endpoint, string $externalId): ?Booking
+    {
+        return Booking::where('endpoint', $endpoint)
+            ->whereJsonContains('meta->moved_from', $externalId)
+            ->first();
+    }
+
+    /**
+     * Fresh attributes for a row that already exists, without dropping what
+     * the row remembers beyond them (`meta.moved_from`).
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function keepingMeta(Booking $booking, array $attributes): array
+    {
+        $attributes['meta'] = array_merge((array) $booking->meta, (array) ($attributes['meta'] ?? []));
+
+        return $attributes;
     }
 
     /**

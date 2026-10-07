@@ -16,7 +16,9 @@ Cal.com replaces a rescheduled booking with a new one and sends the new uid in `
 in `rescheduleUid`. Looked up by the new uid alone, every reschedule recorded a second row, fired
 `BookingMade`, and left the original upcoming. The original row now moves to the new uid, and
 `BookingRescheduled` carries the old one in `previousExternalId`. A redelivered reschedule fires
-nothing.
+nothing. The row remembers its old uids (`meta.moved_from`), so a late redelivery for the old uid
+does not bring the old slot back, and a cancellation that overtakes its reschedule closes the
+original as well. A request that is moved stays a request.
 
 ### Fixed: a cancellation for an unknown booking was dropped
 

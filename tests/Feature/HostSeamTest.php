@@ -112,6 +112,57 @@ class HostSeamTest extends TestCase
     }
 
     #[Test]
+    public function a_late_redelivery_for_the_old_uid_does_not_bring_the_old_slot_back(): void
+    {
+        Event::fake([BookingMade::class, BookingCancelled::class]);
+
+        $this->deliver($this->created());
+        $this->deliver($this->rescheduled());
+
+        // The first CREATED timed out and Cal.com delivers it again; a stray
+        // cancellation for the old uid arrives too. Cal.com closes the old
+        // booking itself on a reschedule, the appointment lives on.
+        $this->deliver($this->created());
+        $this->deliver($this->created(['triggerEvent' => 'BOOKING_REQUESTED']));
+        $this->deliver($this->created(['triggerEvent' => 'BOOKING_CANCELLED']));
+
+        $this->assertSame(1, Booking::count());
+        $this->assertSame('cal-2', Booking::first()->external_id);
+        $this->assertFalse(Booking::first()->isCancelled());
+        Event::assertDispatchedTimes(BookingMade::class, 1);
+        Event::assertNotDispatched(BookingCancelled::class);
+    }
+
+    #[Test]
+    public function a_cancellation_that_overtakes_its_reschedule_closes_the_original_too(): void
+    {
+        Event::fake([BookingCancelled::class, BookingRescheduled::class]);
+        $this->travelTo('2026-08-01 12:00:00');
+
+        $this->deliver($this->created());
+        $this->deliver($this->created(['triggerEvent' => 'BOOKING_CANCELLED', 'payload' => ['uid' => 'cal-2']]));
+        $this->deliver($this->rescheduled());
+
+        // Neither the original slot nor the new one is an appointment now.
+        $this->assertSame(0, Booking::query()->upcoming()->count());
+        $this->assertTrue(Booking::where('external_id', 'cal-1')->first()->isCancelled());
+        Event::assertDispatchedTimes(BookingCancelled::class, 2);
+        Event::assertNotDispatched(BookingRescheduled::class);
+    }
+
+    #[Test]
+    public function a_moved_request_is_still_a_request(): void
+    {
+        $this->travelTo('2026-08-01 12:00:00');
+
+        $this->deliver($this->created(['triggerEvent' => 'BOOKING_REQUESTED']));
+        $this->deliver($this->rescheduled());
+
+        $this->assertSame(Booking::STATUS_REQUESTED, Booking::first()->status);
+        $this->assertSame(0, Booking::query()->upcoming()->count());
+    }
+
+    #[Test]
     public function a_cancellation_for_an_unknown_booking_is_passed_on_and_wins_over_a_late_creation(): void
     {
         Event::fake([BookingCancelled::class, BookingMade::class]);

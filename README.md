@@ -88,6 +88,14 @@ and never a second booking. Whatever your site keyed on the old id finds it in
 **A listener that throws is retried.** The row and its listeners run in one transaction: if a
 listener fails, nothing is recorded, the provider gets a 500 and delivers again, and the retry is a
 first delivery for every listener. A listener that must not be retried catches its own exception.
+A **queued** listener should set `public $afterCommit = true;`, otherwise its job is queued inside
+the transaction and survives a rollback.
+
+**Order is not guaranteed, and the addon copes:** a cancellation for a booking it never saw is
+recorded as cancelled (and `BookingCancelled` fires, so a site that knew the booking from elsewhere
+hears of it); a late `BOOKING_CREATED` after that does nothing; a late redelivery for the old uid of
+a moved booking finds the moved row; a cancellation that overtakes its own reschedule closes the
+original too.
 
 ### Tags
 
