@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Without `signature.timestamp_header` the addon logs a one-time notice (once a day) that there is no replay protection, and drops exact replays: same endpoint, uid, trigger and `payload.updatedAt` within 24 hours answer 200 with `duplicate: true`. Needs a working cache store. Deliveries without `updatedAt` are not deduped.
+
 ## 1.7.1 (2026-11-16)
 
 ### Changed
