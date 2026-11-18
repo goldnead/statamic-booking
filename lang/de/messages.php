@@ -3,6 +3,7 @@
 return [
     'unknown_endpoint' => 'Unbekannter Endpunkt.',
     'unauthorized' => 'Nicht berechtigt.',
+    'unprocessable' => 'Lieferung nicht verarbeitbar.',
     'utility_title' => 'Buchungen',
     'utility_nav' => 'Buchungen',
     'utility_description' => 'Termine ansehen, die über Cal.com hereingekommen sind.',
