@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `BookingMade`, `BookingRequested`, `BookingRescheduled` and `BookingCancelled` now implement `ShouldDispatchAfterCommit`: they fire after the recording transaction has committed, never inside it. For listener authors: a listener that throws no longer rolls the booking row back. The row stays saved, and the provider's redelivery finds it and fires nothing, so listeners must be safe to repeat on their own (queue them, or check before acting). No migration, no new config key.
 - Without `signature.timestamp_header` the addon logs a one-time notice (once a day) that there is no replay protection, and drops exact replays: same endpoint, uid, trigger and `payload.updatedAt` within 24 hours answer 200 with `duplicate: true`. Needs a working cache store. Deliveries without `updatedAt` are not deduped.
 
 ### Fixed

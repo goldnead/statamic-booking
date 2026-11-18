@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicBooking\Events;
 
 use Goldnead\StatamicBooking\Models\Booking;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
@@ -15,7 +16,7 @@ use Illuminate\Foundation\Events\Dispatchable;
  * Covers both "the visitor cancelled" and "the organiser declined a request";
  * `$booking->status` says which.
  */
-class BookingCancelled
+class BookingCancelled implements ShouldDispatchAfterCommit
 {
     use Dispatchable;
 

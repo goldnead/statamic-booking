@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicBooking\Events;
 
 use Goldnead\StatamicBooking\Models\Booking;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
@@ -14,7 +15,7 @@ use Illuminate\Foundation\Events\Dispatchable;
  * organiser) may. If the request is accepted, {@see BookingMade} follows for
  * the same row; if it is declined, {@see BookingCancelled}.
  */
-class BookingRequested
+class BookingRequested implements ShouldDispatchAfterCommit
 {
     use Dispatchable;
 

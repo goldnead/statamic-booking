@@ -67,6 +67,12 @@ Event::listen(BookingMade::class, function (BookingMade $event) {
 });
 ```
 
+**Events fire after the commit** (they implement Laravel's
+[`ShouldDispatchAfterCommit`](https://laravel.com/docs/12.x/events#dispatching-events-after-database-transactions)).
+A listener always sees the committed row. If a listener throws, the row stays saved and the
+provider's retry finds it and fires nothing, so write listeners that can be repeated safely
+(queue them, or check before acting).
+
 `BookingRescheduled` and `BookingCancelled` work the same way. A cancellation **keeps** the row and
 stamps `cancelled_at`: "there was an appointment and it was cancelled" is a different fact from
 "there never was one", and only one of them can be reconstructed later.

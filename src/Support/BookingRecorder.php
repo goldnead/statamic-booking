@@ -39,14 +39,16 @@ class BookingRecorder
         }
 
         /*
-         * One transaction around the row AND its listeners.
+         * One transaction around the row. The events are
+         * ShouldDispatchAfterCommit: they fire only once this transaction has
+         * committed, and not at all if it rolls back.
          *
          * Events fire once per real change, so a redelivery finds the row and
-         * fires nothing. Without the transaction a listener that threw left the
-         * row behind: the provider got a 500, retried, found the row, and the
-         * consequence (a credit held, a mail sent) was lost for good while the
-         * booking looked recorded. Rolled back, the retry is a first delivery
-         * again and the listener gets its second chance.
+         * fires nothing. The consequence of that: a listener that throws does
+         * NOT roll the row back. The booking stays recorded, the provider's
+         * retry finds the row and fires nothing, so a failed listener is not
+         * called a second time by redelivery. Listeners must therefore be
+         * repeatable on their own (queue them, or check before acting).
          */
         return DB::transaction(fn () => match ($trigger) {
             'BOOKING_CREATED' => $this->create($endpoint, $externalId, $event),
