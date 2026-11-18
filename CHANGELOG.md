@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.0 (2026-11-18)
 
 ### Changed
 
@@ -12,6 +12,10 @@
 - A signed delivery without `payload.uid` (or with unreadable JSON) now answers 422 and is logged. Before: 200, nothing in the log. Unhandled triggers still answer 200 but are logged.
 - A reschedule whose original booking was already cancelled, with a new unknown uid, now records the new uid as a normal appointment. Before: the cancelled row came back and the new booking never existed.
 - An unreadable `startTime` or `endTime` is logged as a warning.
+
+### Upgrading
+
+- No migration, no new config key. Listeners of the four booking events now run after the commit and must be safe to repeat; see Changed.
 
 ## 1.7.1 (2026-11-16)
 
