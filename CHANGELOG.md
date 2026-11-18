@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `BookingMade`, `BookingRequested`, `BookingRescheduled` and `BookingCancelled` now implement `ShouldDispatchAfterCommit`: they fire after the recording transaction has committed, never inside it. For listener authors: a listener that throws no longer rolls the booking row back. The row stays saved, and the provider's redelivery finds it and fires nothing, so listeners must be safe to repeat on their own (queue them, or check before acting). No migration, no new config key.
+
 ## 1.7.1 (2026-11-16)
 
 ### Changed

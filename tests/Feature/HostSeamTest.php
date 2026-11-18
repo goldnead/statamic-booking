@@ -188,36 +188,34 @@ class HostSeamTest extends TestCase
     }
 
     #[Test]
-    public function a_failing_listener_leaves_nothing_behind_so_the_retry_runs_it_again(): void
+    public function a_failing_listener_leaves_the_row_and_the_retry_does_not_call_it_again(): void
     {
         $calls = 0;
 
         Event::listen(BookingMade::class, function () use (&$calls) {
             $calls++;
 
-            if ($calls === 1) {
-                throw new RuntimeException('Datenbank kurz weg');
-            }
+            throw new RuntimeException('Datenbank kurz weg');
         });
 
         $this->withoutExceptionHandling();
 
         try {
             $this->deliver($this->created());
-            $this->fail('Der Fehler des Zuhoerers muss beim Anbieter ankommen, sonst wiederholt er nicht.');
+            $this->fail('Der Fehler des Zuhoerers muss beim Anbieter ankommen.');
         } catch (RuntimeException) {
             // expected
         }
 
-        // Before: the row was written, the listener failed, and the provider's
-        // retry found the row and fired nothing. The consequence was lost for
-        // good while the booking looked recorded.
-        $this->assertSame(0, Booking::count());
+        // Events fire after the commit (decision 2026-11-18): the row stays
+        // saved, and the provider's retry finds it and fires nothing. A
+        // listener has to be repeatable on its own.
+        $this->assertSame(1, Booking::count());
 
         $this->deliver($this->created())->assertOk();
 
         $this->assertSame(1, Booking::count());
-        $this->assertSame(2, $calls);
+        $this->assertSame(1, $calls);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicBooking\Events;
 
 use Goldnead\StatamicBooking\Models\Booking;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
@@ -15,7 +16,7 @@ use Illuminate\Foundation\Events\Dispatchable;
  * Also dispatched when a request that needed confirming is accepted: that is
  * the moment the appointment starts to exist.
  */
-class BookingMade
+class BookingMade implements ShouldDispatchAfterCommit
 {
     use Dispatchable;
 

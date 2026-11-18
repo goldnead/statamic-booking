@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicBooking\Events;
 
 use Goldnead\StatamicBooking\Models\Booking;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
@@ -16,7 +17,7 @@ use Illuminate\Foundation\Events\Dispatchable;
  * `$booking->external_id` is the new one; whatever a site keyed on the old id
  * finds it in `$previousExternalId`.
  */
-class BookingRescheduled
+class BookingRescheduled implements ShouldDispatchAfterCommit
 {
     use Dispatchable;
 
