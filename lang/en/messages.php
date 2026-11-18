@@ -3,6 +3,7 @@
 return [
     'unknown_endpoint' => 'Unknown endpoint.',
     'unauthorized' => 'Unauthorized.',
+    'unprocessable' => 'Unprocessable delivery.',
     'utility_title' => 'Bookings',
     'utility_nav' => 'Bookings',
     'utility_description' => 'Look at the appointments that came in through Cal.com.',
