@@ -3,6 +3,8 @@
 namespace Goldnead\StatamicBooking\Support;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Is this delivery really from the provider, and is it recent?
@@ -85,6 +87,13 @@ class SignatureVerifier
         $tolerance = config('statamic-booking.signature.tolerance_seconds');
 
         if (! is_string($header) || $header === '') {
+            // Stated once a day instead of silently: a site owner should know
+            // a captured delivery stays valid, and that exact replays are
+            // only caught by the dedupe in the controller.
+            if (Cache::add('statamic-booking:no-replay-protection-noticed', true, now()->addDay())) {
+                Log::notice('[statamic-booking] no timestamp header configured: signatures never expire, there is no replay protection beyond the duplicate check (uid, trigger, updatedAt)');
+            }
+
             return null;
         }
 

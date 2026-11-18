@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Without `signature.timestamp_header` the addon logs a one-time notice (once a day) that there is no replay protection, and drops exact replays: same endpoint, uid, trigger and `payload.updatedAt` within 24 hours answer 200 with `duplicate: true`. Needs a working cache store. Deliveries without `updatedAt` are not deduped.
+
 ### Fixed
 
 - A signed delivery without `payload.uid` (or with unreadable JSON) now answers 422 and is logged. Before: 200, nothing in the log. Unhandled triggers still answer 200 but are logged.
