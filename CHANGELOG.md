@@ -6,6 +6,12 @@
 
 - `BookingMade`, `BookingRequested`, `BookingRescheduled` and `BookingCancelled` now implement `ShouldDispatchAfterCommit`: they fire after the recording transaction has committed, never inside it. For listener authors: a listener that throws no longer rolls the booking row back. The row stays saved, and the provider's redelivery finds it and fires nothing, so listeners must be safe to repeat on their own (queue them, or check before acting). No migration, no new config key.
 
+### Fixed
+
+- A signed delivery without `payload.uid` (or with unreadable JSON) now answers 422 and is logged. Before: 200, nothing in the log. Unhandled triggers still answer 200 but are logged.
+- A reschedule whose original booking was already cancelled, with a new unknown uid, now records the new uid as a normal appointment. Before: the cancelled row came back and the new booking never existed.
+- An unreadable `startTime` or `endTime` is logged as a warning.
+
 ## 1.7.1 (2026-11-16)
 
 ### Changed

@@ -41,7 +41,19 @@ class WebhookController
             return response()->json(['message' => __('statamic-booking::messages.unauthorized')], 401);
         }
 
-        $booking = $recorder->record($endpoint, (array) $request->json()->all());
+        $payload = (array) $request->json()->all();
+        $uid = $payload['payload']['uid'] ?? null;
+
+        // A signed body that carries no uid (or is no JSON at all) cannot be
+        // recorded and will not get better on a retry. 422 says so, and the
+        // log tells the site owner why nothing appeared.
+        if (! is_array($payload['payload'] ?? null) || ! is_string($uid) || $uid === '') {
+            Log::warning('[statamic-booking] dropped a delivery on ['.$endpoint.']: no payload.uid in the body (unreadable JSON or a missing uid)');
+
+            return response()->json(['message' => __('statamic-booking::messages.unprocessable')], 422);
+        }
+
+        $booking = $recorder->record($endpoint, $payload);
 
         // 200 either way once the signature holds. A trigger this addon does
         // not handle is not an error on the provider's side, and answering

@@ -10,6 +10,7 @@ use Goldnead\StatamicBooking\Models\Booking;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Turns one provider payload into one row, and says what happened.
@@ -32,6 +33,8 @@ class BookingRecorder
             // Without the provider's own id there is nothing to be idempotent
             // about. Recording it anyway would mean a redelivery creates a
             // second booking, which is worse than dropping one malformed call.
+            Log::warning('[statamic-booking] dropped a delivery on ['.$endpoint.']: no payload.uid');
+
             return null;
         }
 
@@ -64,8 +67,15 @@ class BookingRecorder
             // that will never happen.
             'BOOKING_CANCELLED', 'BOOKING_REJECTED' => $this->cancel($endpoint, $externalId, $event, $trigger),
 
-            default => null,
+            default => $this->unhandled($endpoint, $trigger, $externalId),
         });
+    }
+
+    protected function unhandled(string $endpoint, string $trigger, string $externalId): ?Booking
+    {
+        Log::warning('[statamic-booking] ignored trigger ['.$trigger.'] for ['.$externalId.'] on ['.$endpoint.']: not handled by this addon');
+
+        return null;
     }
 
     /**
@@ -175,6 +185,14 @@ class BookingRecorder
             // The payload is the reschedule's; its `uid` is the new one, so it
             // is pointed back at the row being closed.
             $this->close($original, Booking::STATUS_CANCELLED, ['uid' => $original->external_id] + $event);
+        }
+
+        if (! $existing && $original && $original->isCancelled()) {
+            // The old row was closed (Cal.com cancels it itself) and the new
+            // uid is unknown. Handing the cancelled row back meant the
+            // appointment that exists was never recorded. Falls through to
+            // the unknown-booking branch below, a normal appointment.
+            $original = null;
         }
 
         if (! $existing && $original) {
@@ -332,8 +350,8 @@ class BookingRecorder
     protected function attributes(array $event): array
     {
         $attendee = (array) Arr::get($event, 'attendees.0', []);
-        $start = $this->time(Arr::get($event, 'startTime'));
-        $end = $this->time(Arr::get($event, 'endTime'));
+        $start = $this->time(Arr::get($event, 'startTime'), 'startTime');
+        $end = $this->time(Arr::get($event, 'endTime'), 'endTime');
 
         return [
             'scheduled_at' => $start,
@@ -356,7 +374,7 @@ class BookingRecorder
         ];
     }
 
-    protected function time(mixed $value): ?Carbon
+    protected function time(mixed $value, string $field = 'time'): ?Carbon
     {
         if (! is_string($value) || $value === '') {
             return null;
@@ -367,6 +385,8 @@ class BookingRecorder
         } catch (\Throwable) {
             // A provider that sends an unparseable time still made a booking;
             // losing the row over the clock would be the worse trade.
+            Log::warning('[statamic-booking] unreadable '.$field.' ['.$value.']: the booking is recorded without it');
+
             return null;
         }
     }
