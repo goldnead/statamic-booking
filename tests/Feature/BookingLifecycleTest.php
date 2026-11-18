@@ -154,9 +154,7 @@ class BookingLifecycleTest extends TestCase
         // creates a second booking, which is worse than losing one malformed
         // call — and the signature already proved it came from the provider,
         // so this is their bug to see in our log, not ours to paper over.
-        $this->deliver($this->created(['payload' => ['uid' => null]]))
-            ->assertOk()
-            ->assertJson(['recorded' => false]);
+        $this->deliver($this->created(['payload' => ['uid' => null]]))->assertStatus(422);
 
         $this->assertSame(0, Booking::count());
     }
